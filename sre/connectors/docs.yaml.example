@@ -1,0 +1,93 @@
+# Documentation collector template — multi-source.
+
+name: docs
+kind: knowledge
+env: corp
+sources:
+
+  - type: confluence
+    base_url: "${secret:confluence/base_url}"
+    auth:
+      type: api_token
+      email: "${secret:confluence/email}"
+      token: "${secret:confluence/api_token}"
+    scopes:
+      spaces:
+        - "SRE"
+        - "ARCH"
+        - "RUNBOOKS"
+      # Exclude archived / drafts.
+      excludeLabels:
+        - "archived"
+        - "draft"
+
+  - type: sharepoint
+    tenant_url: "${secret:sharepoint/tenant_url}"
+    auth:
+      type: app_only
+      client_id:     "${secret:sharepoint/client_id}"
+      client_secret: "${secret:sharepoint/client_secret}"
+    scopes:
+      sites:
+        - "/sites/architecture"
+        - "/sites/sre-runbooks"
+
+  - type: notion
+    auth:
+      type: integration_token
+      token: "${secret:notion/integration_token}"
+    scopes:
+      workspaces:
+        - "enterprise-sre"
+
+  - type: gdrive
+    auth:
+      type: service_account
+      json: "${secret:gdrive/service_account_json}"
+    scopes:
+      sharedDrives:
+        - name: "SRE Runbooks"
+        - name: "Architecture HLDs"
+
+  - type: jira
+    base_url: "${secret:jira/base_url}"
+    auth:
+      type: api_token
+      email: "${secret:jira/email}"
+      token: "${secret:jira/api_token}"
+    scopes:
+      projects:
+        - "SRE"
+        - "INC"
+        - "CHG"
+
+refresh:
+  incremental: "0 */6 * * *"
+  full:        "0 2 * * 0"
+
+pipeline:
+  classify:
+    model: "claude-haiku-4-5"
+    drop_classes: ["noise"]
+  parse:
+    pdf:        true
+    vsdx:       true
+    drawio:     true
+    lucid:      true
+    ocr_images: true
+  scrub:
+    patterns:
+      - name: "generic-password"
+        regex: "(?i)(password|passwd|pwd)\\s*[:=]\\s*\\S+"
+      - name: "aws-key"
+        regex: "AKIA[0-9A-Z]{16}"
+      - name: "bearer-token"
+        regex: "(?i)bearer\\s+[a-z0-9._-]{20,}"
+  embed:
+    model: "all-MiniLM-L6-v2"
+    chunk_size: 1000
+    chunk_overlap: 120
+    namespace_template: "docs:{business_process_tag|default='unscoped'}"
+
+output:
+  kg_namespace: "doc:corp"

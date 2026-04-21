@@ -1,0 +1,35 @@
+# BMC Helix (Remedy) connector template.
+
+name: bmc-helix
+kind: itsm-cmdb
+auth:
+  type: oauth2
+  env: prod
+  base_url:      "${secret:bmc-helix/prod/base_url}"    # e.g. https://tenant.bmc.com/api
+  client_id:     "${secret:bmc-helix/prod/client_id}"
+  client_secret: "${secret:bmc-helix/prod/client_secret}"
+  token_url:     "${secret:bmc-helix/prod/token_url}"
+rate_limits:
+  requests_per_minute: 300
+refresh:
+  cis:               "*/15 * * * *"
+  ci_relationships:  "*/30 * * * *"
+  business_services: "0 * * * *"
+  changes_stream:    "*/2 * * * *"
+  incidents_stream:  "*/2 * * * *"
+scope:
+  business_services:
+    # Only ingest business services in these categories. Everything else is out of scope.
+    categories:
+      - "Revenue-Generating"
+      - "Regulated"
+      - "Mission-Critical"
+  changes:
+    # Only ingest recently-closed changes for correlation.
+    maxAgeHours: 72
+authoritative_fields:
+  - ownership
+  - criticalityTier
+  - businessService
+output:
+  kg_namespace: "bmc_helix:prod"

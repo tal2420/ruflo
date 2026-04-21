@@ -1,0 +1,24 @@
+# SLO analyst agent
+type: sre-slo-analyst
+version: "0.1.0"
+layer: "2-sre-brain"
+description: "Computes SLOs and error budgets per business process (not per service). Flags burn-rate excursions."
+capabilities:
+  - slo-computation
+  - error-budget-tracking
+  - burn-rate-alerting
+tools:
+  allowed:
+    - kg__query
+    - mcp__dynatrace__query_timeseries
+    - mcp__prometheus__query_range
+    - tickets__draft
+  denied:
+    - tickets__create
+    - mcp__*_write
+blast_radius: read
+environments:
+  - prod
+schedule:
+  incremental: "*/5 * * * *"
+prompt: ./slo-analyst.md

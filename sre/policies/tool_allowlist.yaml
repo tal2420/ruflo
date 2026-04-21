@@ -1,0 +1,149 @@
+# SREFlow tool allowlist — authoritative registry.
+#
+# Every tool an SRE agent may invoke is listed here with its blast-radius class,
+# allowed environments, and required human approvals. Unlisted tools are denied.
+#
+# Classes:
+#   read          - no external mutation
+#   write-low     - scoped mutation, low blast radius (e.g., restart one pod)
+#   write-high    - broader mutation (scale a deployment, shift traffic)
+#   destructive   - not bound to any agent role; break-glass only
+#
+# Approvals are evaluated by sre/policies/approvals.rego against the affected
+# business-process criticality tier.
+
+version: "0.1.0"
+
+tools:
+
+  # ---------- Knowledge graph (internal) ----------
+  - name: kg__query
+    class: read
+    envs: [prod, stage, corp]
+    approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+  - name: kg__upsert_entity
+    class: write-low
+    envs: [corp]
+    approvals: { tier1: 0, tier2: 0, tier3: 0 }
+    notes: "Internal state only; no external side effect."
+
+  - name: kg__upsert_edge
+    class: write-low
+    envs: [corp]
+    approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+  # ---------- Dynatrace (read-only) ----------
+  - name: mcp__dynatrace__list_entities
+    class: read
+    envs: [prod, stage]
+    approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+  - name: mcp__dynatrace__query_timeseries
+    class: read
+    envs: [prod, stage]
+
+  - name: mcp__dynatrace__query_logs
+    class: read
+    envs: [prod, stage]
+    notes: "Output is scrubbed for PII at the hook layer before returning to the agent."
+
+  - name: mcp__dynatrace__query_traces
+    class: read
+    envs: [prod, stage]
+
+  # ---------- SolarWinds (read-only) ----------
+  - name: mcp__solarwinds__swis_query
+    class: read
+    envs: [prod, stage, corp]
+
+  - name: mcp__solarwinds__ncm_get_config
+    class: read
+    envs: [prod, stage, corp]
+    notes: "Configs are scrubbed of credentials at the hook layer."
+
+  # ---------- BMC Helix / Discovery (read-only collector usage) ----------
+  - name: mcp__bmc-helix__list_cis
+    class: read
+    envs: [prod, stage]
+
+  - name: mcp__bmc-helix__list_business_services
+    class: read
+    envs: [prod, stage]
+
+  - name: mcp__bmc-helix__list_incidents
+    class: read
+    envs: [prod, stage]
+
+  - name: mcp__bmc-helix__list_changes
+    class: read
+    envs: [prod, stage]
+
+  - name: mcp__bmc-discovery__query
+    class: read
+    envs: [prod, stage]
+
+  # ---------- Ticketing (write-low) ----------
+  - name: tickets__create
+    class: write-low
+    envs: [corp]
+    approvals: { tier1: 0, tier2: 0, tier3: 0 }
+    notes: "Creates tickets only. No external system mutation beyond ticketing."
+
+  - name: tickets__update
+    class: write-low
+    envs: [corp]
+
+  # ---------- Remediation (write-high) ----------
+  - name: mcp__k8s__restart_pod
+    class: write-high
+    envs: [prod, stage]
+    approvals: { tier1: 1, tier2: 1, tier3: 0 }
+    rate_limit: "10/hour"
+    notes: "Tier-3 allowed autonomous within envelope; tier-1/2 require 1 human approval."
+
+  - name: mcp__k8s__scale_deployment
+    class: write-high
+    envs: [prod, stage]
+    approvals: { tier1: 1, tier2: 1, tier3: 1 }
+    rate_limit: "20/hour"
+
+  - name: mcp__cloud__restart_instance
+    class: write-high
+    envs: [prod, stage]
+    approvals: { tier1: 1, tier2: 1, tier3: 0 }
+    rate_limit: "5/hour"
+
+  - name: mcp__feature-flag__toggle
+    class: write-high
+    envs: [prod, stage]
+    approvals: { tier1: 1, tier2: 1, tier3: 1 }
+
+  - name: mcp__traffic__shift_weights
+    class: write-high
+    envs: [prod, stage]
+    approvals: { tier1: 2, tier2: 1, tier3: 1 }
+
+  # ---------- Destructive (NEVER BOUND) ----------
+  # These are listed only to make their refusal explicit. No agent role may call them.
+  # Break-glass is the only path, and break-glass does not read this file.
+  - name: mcp__k8s__delete_namespace
+    class: destructive
+    envs: []
+    approvals: { tier1: -1, tier2: -1, tier3: -1 }
+    notes: "Destructive. Not bound to any agent role."
+
+  - name: mcp__database__drop_table
+    class: destructive
+    envs: []
+    approvals: { tier1: -1, tier2: -1, tier3: -1 }
+
+  - name: mcp__dns__update
+    class: destructive
+    envs: []
+    approvals: { tier1: -1, tier2: -1, tier3: -1 }
+
+  - name: mcp__iam__revoke_role
+    class: destructive
+    envs: []
+    approvals: { tier1: -1, tier2: -1, tier3: -1 }

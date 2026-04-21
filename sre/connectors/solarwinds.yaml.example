@@ -1,0 +1,34 @@
+# SolarWinds Orion connector template (SWIS + REST).
+
+name: solarwinds
+kind: network
+auth:
+  type: basic
+  env: prod
+  swis_url:  "${secret:solarwinds/prod/swis_url}"     # e.g. https://orion.corp/SolarWinds/InformationService/v3/Json/Query
+  username:  "${secret:solarwinds/prod/username}"
+  password:  "${secret:solarwinds/prod/password}"
+rate_limits:
+  requests_per_minute: 120
+refresh:
+  nodes:           "*/10 * * * *"
+  interfaces:      "*/10 * * * *"
+  ncm_configs:     "0 * * * *"
+  ipam:            "0 */6 * * *"
+scope:
+  nodeGroups:
+    - "DC-Primary"
+    - "DC-DR"
+  # Match device types to ingest; all else is ignored.
+  includeVendors:
+    - "Cisco"
+    - "Arista"
+    - "Palo Alto"
+    - "F5"
+scrubbing:
+  ncm_configs:
+    # Regex patterns replaced with [REDACTED] before the config reaches the KG or embeddings.
+    - "(?i)^(password|secret|community)\\s+\\S+"
+    - "(?i)snmp-server\\s+community\\s+\\S+"
+output:
+  kg_namespace: "solarwinds:prod"

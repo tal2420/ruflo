@@ -1,0 +1,27 @@
+# Entity resolver agent
+type: entity-resolver
+version: "0.1.0"
+layer: "1-discovery"
+description: "Fuses entities across Dynatrace, SolarWinds, BMC Discovery, BMC Helix, and docs into a canonical identity graph using deterministic + probabilistic matchers."
+capabilities:
+  - deterministic-matching
+  - probabilistic-matching
+  - consensus-validation
+  - conflict-queuing
+tools:
+  allowed:
+    - kg__query
+    - kg__upsert_canonical_entity
+    - kg__upsert_same_as_edge
+    - kg__append_conflict_queue
+    - embeddings__similarity
+  denied:
+    - mcp__*_write
+blast_radius: read
+environments:
+  - prod
+  - stage
+  - corp
+schedule:
+  incremental: "*/20 * * * *"
+prompt: ./entity-resolver.md

@@ -1,0 +1,27 @@
+# Improvement proposer agent
+type: sre-improvement-proposer
+version: "0.1.0"
+layer: "2-sre-brain"
+description: "Converts risk/SLO/cost/security findings into structured Jira/Linear tickets after BFT consensus validation. Files tickets; never executes changes."
+capabilities:
+  - ticket-drafting
+  - consensus-validation
+  - deduplication
+  - prioritization
+tools:
+  allowed:
+    - kg__query
+    - tickets__query
+    - tickets__create
+    - tickets__update
+    - consensus__vote
+  denied:
+    - mcp__*_write
+    - tickets__close
+    - tickets__delete
+blast_radius: write-low
+environments:
+  - corp
+schedule:
+  incremental: "*/30 * * * *"
+prompt: ./improvement-proposer.md

@@ -1,0 +1,29 @@
+# SRE risk scorer agent
+type: sre-risk-scorer
+version: "0.1.0"
+layer: "2-sre-brain"
+description: "Continuously scores reliability risk per business process. Flags SPOFs, missing monitoring, high change velocity vs. low coverage, config drift, expiring certs, DR gaps."
+capabilities:
+  - spof-detection
+  - monitoring-coverage-analysis
+  - change-velocity-risk
+  - drift-detection
+  - cert-expiry-tracking
+  - dr-gap-analysis
+tools:
+  allowed:
+    - kg__query
+    - embeddings__search
+    - tickets__draft
+  denied:
+    - tickets__create
+    - mcp__*_write
+blast_radius: read
+environments:
+  - prod
+  - stage
+  - corp
+schedule:
+  incremental: "0 */1 * * *"
+  full: "0 7 * * *"
+prompt: ./risk-scorer.md

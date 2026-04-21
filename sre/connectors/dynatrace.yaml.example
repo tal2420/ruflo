@@ -1,0 +1,32 @@
+# Dynatrace connector template.
+# Secrets are resolved at runtime from the secret store — do NOT paste real tokens.
+
+name: dynatrace
+kind: apm
+auth:
+  type: api_token
+  env: prod
+  tenant_url: "${secret:dynatrace/prod/tenant_url}"   # e.g. https://ENVIRONMENTID.live.dynatrace.com
+  token:      "${secret:dynatrace/prod/api_token}"
+  token_scopes:
+    - entities.read
+    - problems.read
+    - slo.read
+    - metrics.read
+    - logs.read
+rate_limits:
+  requests_per_minute: 600
+  burst: 60
+refresh:
+  entities:  "*/5 * * * *"
+  problems:  "*/2 * * * *"
+  slos:      "*/15 * * * *"
+scope:
+  managementZones:
+    - "prod-commerce"
+    - "prod-payments"
+  # Exclude is a hard fence — matching entities are never ingested.
+  excludeTagSelector: "owner=infra-sandbox"
+output:
+  kg_namespace: "dynatrace:prod"
+  vector_namespace: null

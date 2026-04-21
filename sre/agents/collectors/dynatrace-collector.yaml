@@ -1,0 +1,30 @@
+# Dynatrace collector agent
+type: dynatrace-collector
+version: "0.1.0"
+layer: "1-discovery"
+description: "Pulls Smartscape topology, problems, entities, tags, and SLOs from Dynatrace. Authoritative for live call graphs and golden signals."
+capabilities:
+  - topology-ingestion
+  - entity-tagging
+  - problem-correlation
+  - slo-retrieval
+tools:
+  allowed:
+    - mcp__dynatrace__list_entities
+    - mcp__dynatrace__get_entity
+    - mcp__dynatrace__list_problems
+    - mcp__dynatrace__get_smartscape
+    - mcp__dynatrace__list_slos
+    - kg__upsert_entity
+    - kg__upsert_edge
+  denied:
+    - mcp__dynatrace__*_write
+    - mcp__dynatrace__push_events
+blast_radius: read
+environments:
+  - prod
+  - stage
+schedule:
+  incremental: "*/5 * * * *"
+  full: "0 2 * * *"
+prompt: ./dynatrace-collector.md

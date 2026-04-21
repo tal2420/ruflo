@@ -1,0 +1,68 @@
+{
+  "name": "sreflow",
+  "version": "0.1.0",
+  "description": "Enterprise SRE overlay on ruflo: business-process discovery, autonomous risk monitoring, incident-response swarm, policy-enforced guardrails.",
+  "author": {
+    "name": "Tal Gruenwald",
+    "email": "tal2004@gmail.com"
+  },
+  "homepage": "https://github.com/tal2420/ruflo/tree/sreflow/scaffolding/sre",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tal2420/ruflo.git"
+  },
+  "license": "MIT",
+  "category": "operations",
+  "tags": [
+    "sre",
+    "observability",
+    "incident-response",
+    "knowledge-graph",
+    "policy-as-code",
+    "dynatrace",
+    "solarwinds",
+    "bmc-helix",
+    "bmc-discovery",
+    "enterprise"
+  ],
+  "engines": {
+    "claudeCode": ">=2.0.0",
+    "node": ">=20.0.0"
+  },
+  "extends": "claude-flow",
+  "agents": {
+    "paths": [
+      "sre/agents/collectors",
+      "sre/agents/graph",
+      "sre/agents/sre",
+      "sre/agents/incident"
+    ]
+  },
+  "skills": {
+    "path": "sre/skills"
+  },
+  "commands": {
+    "path": "sre/commands"
+  },
+  "hooks": {
+    "config": "sre/hooks/hooks.json"
+  },
+  "policies": {
+    "engine": "opa",
+    "path": "sre/policies",
+    "bundle": "sreflow"
+  },
+  "knowledgeGraph": {
+    "backend": "neo4j",
+    "schema": "sre/schema/kg_schema.cypher",
+    "entitySchema": "sre/schema/entity_schema.json"
+  },
+  "connectors": {
+    "templates": "sre/connectors",
+    "secretsProvider": "vault"
+  },
+  "phase": {
+    "current": 0,
+    "maxWriteAuthority": "none"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*|kg__.*|tickets__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash sre/hooks/pre-tool-policy-check.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__.*|kg__.*|tickets__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash sre/hooks/post-tool-audit.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash sre/hooks/post-tool-audit.sh --session-end"
+          }
+        ]
+      }
+    ]
+  }
+}

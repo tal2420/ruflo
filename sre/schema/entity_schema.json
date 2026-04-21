@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sreflow.local/schema/canonical-entity.json",
+  "title": "SREFlow canonical entity",
+  "description": "JSON Schema for canonical entities used at ingestion and conflict-queue boundaries.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "canonicalType", "names", "sameAs", "updatedAt"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "UUIDv7 preferred — time-sortable."
+    },
+    "canonicalType": {
+      "type": "string",
+      "enum": [
+        "Service",
+        "ProcessGroup",
+        "Host",
+        "Datacenter",
+        "Cluster",
+        "Database",
+        "Datastore",
+        "NetworkDevice",
+        "Interface",
+        "Subnet",
+        "VLAN",
+        "IpAssignment",
+        "AppMonitor",
+        "ConfigDrift",
+        "SoftwareInstance",
+        "BusinessApplicationInstance",
+        "BusinessService",
+        "BusinessProcess",
+        "Team",
+        "Person",
+        "Incident",
+        "Change",
+        "Problem",
+        "SLO",
+        "Document"
+      ]
+    },
+    "names": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "tags": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "criticalityTier": {
+      "type": "integer",
+      "enum": [1, 2, 3],
+      "description": "Only applies to BusinessProcess / BusinessService nodes."
+    },
+    "owner": {
+      "type": "object",
+      "properties": {
+        "team": { "type": "string" },
+        "person": { "type": "string" }
+      }
+    },
+    "sameAs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["source", "sourceId", "confidence", "method"],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": ["dynatrace", "solarwinds", "bmc_helix", "bmc_discovery", "doc", "manual"]
+          },
+          "sourceId": { "type": "string" },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "deterministic-fqdn",
+              "deterministic-arn",
+              "deterministic-k8s",
+              "deterministic-mac",
+              "deterministic-repo",
+              "tag-same_as",
+              "probabilistic-name",
+              "probabilistic-tags",
+              "probabilistic-graph-context",
+              "embedding-similarity",
+              "human-curation"
+            ]
+          },
+          "evidence": { "type": "string" },
+          "decidedBy": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Matcher agents that voted for this link."
+          },
+          "observedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

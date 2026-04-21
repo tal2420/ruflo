@@ -1,0 +1,28 @@
+# Business process analyst agent
+type: business-process-analyst
+version: "0.1.0"
+layer: "1-discovery"
+description: "Identifies enterprise business processes and binds them to components (apps, infra, network, datastores, owners). Auto-generates per-process knowledge-base pages + Mermaid/C4 diagrams."
+capabilities:
+  - business-process-identification
+  - component-binding
+  - diagram-generation
+  - kb-page-generation
+tools:
+  allowed:
+    - kg__query
+    - kg__upsert_entity
+    - kg__upsert_edge
+    - embeddings__search
+    - diagram__render_mermaid
+    - diagram__render_c4
+    - kb__publish_page
+  denied:
+    - mcp__*_write
+blast_radius: read
+environments:
+  - corp
+schedule:
+  incremental: "0 */2 * * *"
+  full: "0 6 * * *"
+prompt: ./business-process-analyst.md

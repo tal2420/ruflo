@@ -1,0 +1,24 @@
+# BMC Discovery (ADDM) connector template.
+
+name: bmc-discovery
+kind: cmdb-discovery
+auth:
+  type: api_token
+  env: prod
+  base_url: "${secret:bmc-discovery/prod/base_url}"    # e.g. https://addm.corp/api/v1.1
+  token:    "${secret:bmc-discovery/prod/api_token}"
+rate_limits:
+  requests_per_minute: 120
+refresh:
+  hosts:                       "0 */4 * * *"
+  software_instances:          "0 */4 * * *"
+  business_application_instances: "0 */4 * * *"
+  dependency_model_full:       "0 4 * * 0"
+scope:
+  # Restrict to specific data centers / clouds via ADDM groups if desired.
+  groups:
+    - "DC-Primary"
+    - "DC-DR"
+    - "AWS-Prod"
+output:
+  kg_namespace: "bmc_discovery:prod"

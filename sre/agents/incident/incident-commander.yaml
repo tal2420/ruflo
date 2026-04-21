@@ -1,0 +1,28 @@
+# Incident commander agent
+type: incident-commander
+version: "0.1.0"
+layer: "3-incident"
+description: "Owns an active incident. Assembles context, assigns specialists, runs consensus on root-cause hypotheses, presents remediation proposals. Never executes writes directly."
+capabilities:
+  - context-assembly
+  - specialist-delegation
+  - consensus-orchestration
+  - proposal-composition
+tools:
+  allowed:
+    - kg__query
+    - embeddings__search
+    - swarm__spawn_specialist
+    - swarm__gather_votes
+    - chat__post_update
+    - proposal__compose
+    - proposal__submit_for_approval
+  denied:
+    - mcp__*_write
+    - proposal__auto_execute
+blast_radius: read
+environments:
+  - prod
+  - stage
+invocation: on-page
+prompt: ./incident-commander.md

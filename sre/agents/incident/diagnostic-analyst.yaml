@@ -1,0 +1,28 @@
+# Diagnostic analyst agent (log / metric / trace)
+type: diagnostic-analyst
+version: "0.1.0"
+layer: "3-incident"
+description: "Read-only diagnostic specialist. Instantiated per signal type (logs / metrics / traces / changes) by the incident commander."
+capabilities:
+  - log-pattern-analysis
+  - metric-anomaly-detection
+  - trace-bottleneck-analysis
+  - change-correlation
+tools:
+  allowed:
+    - mcp__dynatrace__query_logs
+    - mcp__dynatrace__query_timeseries
+    - mcp__dynatrace__query_traces
+    - mcp__loki__query
+    - mcp__prometheus__query_range
+    - mcp__tempo__query_traces
+    - mcp__bmc-helix__list_changes
+    - kg__query
+  denied:
+    - mcp__*_write
+blast_radius: read
+environments:
+  - prod
+  - stage
+invocation: spawned-by-commander
+prompt: ./diagnostic-analyst.md

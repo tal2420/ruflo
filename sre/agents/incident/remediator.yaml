@@ -1,0 +1,32 @@
+# Remediator agent (scoped writes only)
+type: remediator
+version: "0.1.0"
+layer: "3-incident"
+description: "Executes approved remediation steps within a tight envelope. Each step passes through the pre-tool policy check; failures auto-rollback and freeze the swarm."
+capabilities:
+  - approved-runbook-execution
+  - canary-rollout
+  - health-verification
+  - auto-rollback
+tools:
+  allowed:
+    - mcp__k8s__restart_pod
+    - mcp__k8s__scale_deployment
+    - mcp__cloud__restart_instance
+    - mcp__feature-flag__toggle
+    - mcp__traffic__shift_weights
+    - mcp__health__check
+    - proposal__mark_step_complete
+  denied:
+    - mcp__*_delete_*
+    - mcp__*_destroy_*
+    - mcp__dns__update
+    - mcp__iam__*
+    - mcp__database__schema_change
+    - mcp__secrets__rotate
+blast_radius: write-high
+environments:
+  - prod
+  - stage
+invocation: on-approval
+prompt: ./remediator.md

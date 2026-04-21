@@ -1,0 +1,32 @@
+# SolarWinds collector agent
+type: solarwinds-collector
+version: "0.1.0"
+layer: "1-discovery"
+description: "Pulls NPM (L2/L3 topology, interface state), SAM (app monitors), NCM (device configs, drift), IPAM (subnets/VLANs) from SolarWinds Orion via SWIS."
+capabilities:
+  - network-topology
+  - interface-state
+  - config-drift-detection
+  - ipam-ingestion
+tools:
+  allowed:
+    - mcp__solarwinds__swis_query
+    - mcp__solarwinds__list_nodes
+    - mcp__solarwinds__get_node
+    - mcp__solarwinds__list_interfaces
+    - mcp__solarwinds__ncm_get_config
+    - mcp__solarwinds__ipam_list_subnets
+    - kg__upsert_entity
+    - kg__upsert_edge
+  denied:
+    - mcp__solarwinds__*_write
+    - mcp__solarwinds__ncm_push_config
+blast_radius: read
+environments:
+  - prod
+  - stage
+  - corp
+schedule:
+  incremental: "*/10 * * * *"
+  full: "0 3 * * *"
+prompt: ./solarwinds-collector.md

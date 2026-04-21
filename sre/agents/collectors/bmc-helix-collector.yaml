@@ -1,0 +1,35 @@
+# BMC Helix / Remedy collector agent
+type: bmc-helix-collector
+version: "0.1.0"
+layer: "1-discovery"
+description: "Pulls CMDB CIs + relationships, incident/change/problem history, and business-service criticality from BMC Helix. Authoritative for ownership, criticality tier, and change events."
+capabilities:
+  - cmdb-ingestion
+  - ownership-resolution
+  - criticality-tier-assignment
+  - change-event-stream
+  - incident-history
+tools:
+  allowed:
+    - mcp__bmc-helix__list_cis
+    - mcp__bmc-helix__get_ci
+    - mcp__bmc-helix__list_ci_relationships
+    - mcp__bmc-helix__list_business_services
+    - mcp__bmc-helix__list_incidents
+    - mcp__bmc-helix__list_changes
+    - mcp__bmc-helix__list_problems
+    - kg__upsert_entity
+    - kg__upsert_edge
+  denied:
+    - mcp__bmc-helix__create_*
+    - mcp__bmc-helix__update_*
+    - mcp__bmc-helix__close_*
+blast_radius: read
+environments:
+  - prod
+  - stage
+schedule:
+  incremental: "*/15 * * * *"
+  full: "0 5 * * *"
+  changes_stream: "*/2 * * * *"
+prompt: ./bmc-helix-collector.md

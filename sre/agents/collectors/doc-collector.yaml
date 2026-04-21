@@ -1,0 +1,45 @@
+# Written documentation collector agent
+type: doc-collector
+version: "0.1.0"
+layer: "1-discovery"
+description: "Ingests Confluence, SharePoint, Notion, Google Drive, Jira attachments. Classifies docs, parses PDFs/Word/Visio/Lucid/draw.io, extracts entities, embeds into AgentDB for RAG."
+capabilities:
+  - doc-fetching
+  - mime-classification
+  - pdf-parsing
+  - diagram-parsing
+  - ocr
+  - structured-entity-extraction
+  - embedding-generation
+tools:
+  allowed:
+    - mcp__confluence__list_pages
+    - mcp__confluence__get_page
+    - mcp__sharepoint__list_files
+    - mcp__sharepoint__get_file
+    - mcp__notion__list_pages
+    - mcp__gdrive__list_files
+    - mcp__gdrive__export_file
+    - mcp__jira__list_attachments
+    - pdf__parse
+    - vsdx__parse
+    - drawio__parse
+    - lucid__export
+    - ocr__run
+    - embeddings__embed_chunks
+    - kg__upsert_entity
+    - kg__upsert_edge
+  denied:
+    - mcp__confluence__*_write
+    - mcp__sharepoint__*_write
+    - mcp__notion__*_write
+    - mcp__gdrive__*_write
+    - mcp__jira__create_*
+    - mcp__jira__update_*
+blast_radius: read
+environments:
+  - corp
+schedule:
+  incremental: "0 */6 * * *"
+  full: "0 2 * * 0"
+prompt: ./doc-collector.md
