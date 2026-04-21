@@ -8,6 +8,12 @@ import {
   type TaggedEntity,
   type BusinessProcessCandidate,
 } from "./bp-discovery.js";
+import {
+  extractFeatures,
+  type CallEdge,
+  type FeatureCandidate,
+  type ServiceRecord,
+} from "./feature-extractor.js";
 
 async function readTaggedEntities(driver: Driver): Promise<TaggedEntity[]> {
   const s = driver.session();
@@ -69,6 +75,7 @@ async function upsertBusinessProcess(
     await s.run(
       `MERGE (b:BusinessProcess { id: $id })
        SET b.name             = $name,
+           b.scope            = "application",
            b.criticalityTier  = $tier,
            b.inferenceMethod  = $inferenceMethod,
            b.anchorTags       = $anchorTags,
@@ -82,6 +89,86 @@ async function upsertBusinessProcess(
         anchorTags: bp.anchorTags,
       },
     );
+  } finally {
+    await s.close();
+  }
+}
+
+async function readClusterTopology(
+  driver: Driver,
+  applicationBpId: string,
+): Promise<{ services: ServiceRecord[]; calls: CallEdge[] }> {
+  const s = driver.session();
+  try {
+    const svcR = await s.run(
+      `MATCH (bp:BusinessProcess { id: $bpId })-[:REALIZED_BY]->(c:CanonicalEntity)
+       RETURN c.id AS id, coalesce(c.primaryName, c.id) AS name`,
+      { bpId: applicationBpId },
+    );
+    const services: ServiceRecord[] = svcR.records.map((rec) => ({
+      id: rec.get("id") as string,
+      name: rec.get("name") as string,
+    }));
+    const edgeR = await s.run(
+      `MATCH (bp:BusinessProcess { id: $bpId })-[:REALIZED_BY]->(a:CanonicalEntity),
+             (bp)-[:REALIZED_BY]->(b:CanonicalEntity),
+             (a)-[:CALLS]->(b)
+       RETURN a.id AS fromId, b.id AS toId`,
+      { bpId: applicationBpId },
+    );
+    const calls: CallEdge[] = edgeR.records.map((rec) => ({
+      fromId: rec.get("fromId") as string,
+      toId: rec.get("toId") as string,
+    }));
+    return { services, calls };
+  } finally {
+    await s.close();
+  }
+}
+
+async function upsertFeatureBp(
+  driver: Driver,
+  feature: FeatureCandidate,
+  applicationBpId: string,
+  tier: 1 | 2 | 3,
+): Promise<number> {
+  const componentIds = Array.from(
+    new Set([
+      feature.components.core,
+      ...feature.components.upstream,
+      ...feature.components.downstream,
+    ]),
+  );
+  const s = driver.session();
+  try {
+    const r = await s.run(
+      `MERGE (fbp:BusinessProcess { id: $id })
+       SET fbp.name             = $name,
+           fbp.scope            = "feature",
+           fbp.sourceName       = $sourceName,
+           fbp.criticalityTier  = $tier,
+           fbp.inferenceMethod  = $inferenceMethod,
+           fbp.discoveredBy     = "business-process-analyst",
+           fbp.updatedAt        = datetime()
+       WITH fbp
+       MATCH (app:BusinessProcess { id: $appId })
+       MERGE (fbp)-[:HOSTED_IN]->(app)
+       WITH fbp
+       UNWIND $componentIds AS cid
+       MATCH (c:CanonicalEntity { id: cid })
+       MERGE (fbp)-[:REALIZED_BY]->(c)
+       RETURN count(DISTINCT c) AS linked`,
+      {
+        id: feature.id,
+        name: feature.name,
+        sourceName: feature.sourceName,
+        tier,
+        inferenceMethod: feature.inferenceMethod,
+        appId: applicationBpId,
+        componentIds,
+      },
+    );
+    return r.records[0]?.get("linked")?.toNumber?.() ?? 0;
   } finally {
     await s.close();
   }
@@ -203,21 +290,64 @@ export const businessProcessAnalyst: AgentImpl = {
         });
       }
 
+      // 6. Feature-level pass: for each accepted application, walk its cluster
+      //    topology and extract feature-named entry-point services. Each becomes
+      //    a BusinessProcess at scope="feature", hosted_in the application BP.
+      let totalFeatures = 0;
+      const featureReport: Array<{ appName: string; features: Array<{ id: string; name: string; source: string; linked: number; tier: number }> }> = [];
+      for (const cand of all) {
+        const tier = tierFor(cand);
+        const { services, calls } = await readClusterTopology(driver, cand.id);
+        if (services.length === 0) continue;
+        const features = extractFeatures(services, calls);
+        const appFeatures: typeof featureReport[number]["features"] = [];
+        for (const feature of features) {
+          const linked = await callTool(ctx, client, {
+            name: "kg__upsert_edge",
+            input: { feature, appId: cand.id, tier },
+            target: { env: "corp", businessProcessTier: tier },
+            impl: async (x) => upsertFeatureBp(driver, x.feature, x.appId, x.tier),
+          });
+          appFeatures.push({
+            id: feature.id,
+            name: feature.name,
+            source: feature.sourceName,
+            linked: typeof linked === "number" ? linked : 0,
+            tier,
+          });
+        }
+        if (appFeatures.length > 0) {
+          featureReport.push({ appName: cand.name, features: appFeatures });
+          totalFeatures += appFeatures.length;
+        }
+      }
+
       const summary =
-        `analyzed entities=${tagged.length} bmc_candidates=${(bmcCandidates ?? []).length} ` +
-        `tag_candidates=${tagCandidates.length} accepted=${report.length} ` +
-        `top=${report
+        `analyzed entities=${tagged.length} applications=${report.length} features=${totalFeatures} ` +
+        `top_apps=${report
           .slice(0, 3)
           .map((r) => `${r.name}(tier${r.tier},n=${r.linked})`)
           .join(",")}`;
 
-      // Print the full report for operator visibility.
+      // Print the full two-layer report for operator visibility.
       console.log("");
-      console.log("▶ Business-process candidates:");
+      console.log("▶ Applications (scope=application):");
       for (const r of report) {
         console.log(
-          `  tier-${r.tier}  linked=${String(r.linked).padStart(4)}  ${r.id.padEnd(40)}  ${r.inferenceMethod}`,
+          `  tier-${r.tier}  components=${String(r.linked).padStart(4)}  ${r.id.padEnd(42)}  ${r.inferenceMethod}`,
         );
+      }
+      if (totalFeatures > 0) {
+        console.log("");
+        console.log("▶ Business processes (scope=feature):");
+        for (const app of featureReport) {
+          console.log(`  ── in ${app.appName} (${app.features.length} features):`);
+          for (const f of app.features) {
+            console.log(
+              `      tier-${f.tier}  components=${String(f.linked).padStart(2)}  ${f.name.padEnd(38)}  ← ${f.source}`,
+            );
+          }
+        }
       }
       console.log("");
 
