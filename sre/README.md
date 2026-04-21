@@ -24,6 +24,8 @@ sre/
 ├── hooks/              ← PreToolUse / PostToolUse enforcement + audit
 ├── connectors/         ← per-source config templates (no secrets)
 ├── commands/           ← slash commands
+├── runtime/            ← @sreflow/runtime TS modules (entity resolver, tests)
+├── docs/               ← operator runbooks (Phase 0 bring-up, etc.)
 └── CLAUDE.md           ← behavioral guidance when operating on SRE tasks
 ```
 
