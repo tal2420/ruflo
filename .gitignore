@@ -172,3 +172,6 @@ sre/connectors/*.local.yaml
 
 # SREFlow — Phase-0 generated outputs (rendered diagrams, etc.).
 sre/docs/generated/
+
+# SREFlow — local agent CLI state (audit log, pause flags).
+sre/runtime/.state/

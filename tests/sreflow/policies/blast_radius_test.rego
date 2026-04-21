@@ -127,6 +127,25 @@ test_cross_env_prod_agent_to_stage_denied {
 	not blast_radius.allow with input as i with data.sreflow.tool_allowlist as mock_allowlist
 }
 
+# corp is shared internal state — prod/stage agents may call corp-scoped tools.
+test_prod_agent_writing_corp_kg_allowed {
+	corp_allowlist := {
+		"version": "0.1.0",
+		"tools": [{
+			"name": "kg__upsert_entity",
+			"class": "write-low",
+			"envs": ["corp"],
+			"approvals": {"tier1": 0, "tier2": 0, "tier3": 0},
+		}],
+	}
+	i := object.union(base_input, {
+		"tool": "kg__upsert_entity",
+		"agent": {"role": "collector", "env": "prod"},
+		"target": {"env": "corp", "canonicalEntityId": "c", "businessProcessTier": 3},
+	})
+	blast_radius.allow with input as i with data.sreflow.tool_allowlist as corp_allowlist
+}
+
 # ---------- env not in tool's allowed envs ----------
 test_env_not_in_tool_envs_denied {
 	# kg__query doesn't list "qa" as an allowed env

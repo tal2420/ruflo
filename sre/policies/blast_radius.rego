@@ -30,9 +30,15 @@ env_ok {
 	tool_entry.envs[_] == input.target.env
 }
 
-# The agent's env must match the target's env (cross-env is handled separately).
+# The agent's env must match the target's env — with one exception:
+# corp-scoped tools (the internal KG, tickets, etc.) are called from prod/stage
+# agents by design (a prod collector writes the prod entity into the shared KG).
 agent_env_matches {
 	input.agent.env == input.target.env
+}
+
+agent_env_matches {
+	input.target.env == "corp"
 }
 
 # Class-to-approvals lookup for the business-process criticality tier.

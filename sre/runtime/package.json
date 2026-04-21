@@ -2,7 +2,7 @@
   "name": "@sreflow/runtime",
   "version": "0.1.0",
   "private": true,
-  "description": "SREFlow runtime modules (entity resolver, connector loader, etc.). Self-contained; does not depend on the ruflo umbrella build.",
+  "description": "SREFlow runtime modules (entity resolver, connector loader, agent CLI). Self-contained; does not depend on the ruflo umbrella build.",
   "type": "module",
   "exports": {
     "./entity-resolver": "./src/entity-resolver/index.ts"
@@ -11,12 +11,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "phase0": "tsx scripts/phase0/up.ts",
-    "phase0:live": "tsx scripts/phase0/up-live.ts"
+    "phase0:live": "tsx scripts/phase0/up-live.ts",
+    "agent": "tsx bin/sreflow-agent.ts"
   },
   "dependencies": {
+    "commander": "^12.1.0",
+    "js-yaml": "^4.1.0",
     "neo4j-driver": "^5.20.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.0",
     "tsx": "^4.21.0",
     "typescript": "^5.4.0",
