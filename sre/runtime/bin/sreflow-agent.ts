@@ -198,6 +198,92 @@ program
   });
 
 program
+  .command("run-pipeline")
+  .description(
+    "Run the Phase-1 discovery pipeline: dynatrace-collector → entity-resolver → business-process-analyst. Chains under one session id; stops at the first failure.",
+  )
+  .option("-e, --env <env>", "Agent env for the collector (defaults to the YAML's first entry)")
+  .option("--target-env <env>", "Target env for tool calls")
+  .option("--dry-run", "Check policy for each tool call but skip execution", false)
+  .option("--approvals <list>", "Comma-separated humans approving this run")
+  .option("--opa-url <url>", "OPA server URL", process.env.OPA_URL ?? "http://localhost:8181")
+  .action(async (opts) => {
+    const chain: Array<{ role: string; env?: string }> = [
+      { role: "dynatrace-collector" },
+      { role: "entity-resolver", env: "corp" },
+      { role: "business-process-analyst", env: "corp" },
+    ];
+    const paths = resolvePaths();
+    const sessionId = randomUUID();
+    const approvals = parseApprovals(opts.approvals);
+
+    writeAudit(paths.auditPath, {
+      at: new Date().toISOString(),
+      kind: "agent_start",
+      role: "pipeline",
+      sessionId,
+      detail: `pipeline roles=${chain.map((c) => c.role).join(" → ")} dryRun=${Boolean(opts.dryRun)}`,
+    });
+    console.log(`▶ Pipeline session ${sessionId}`);
+    console.log(`  chain: ${chain.map((c) => c.role).join(" → ")}`);
+    console.log(`  opa=${opts.opaUrl} dry-run=${Boolean(opts.dryRun)}`);
+
+    for (const step of chain) {
+      const def = findAgent(step.role);
+      const impl = getImpl(step.role);
+      if (!impl) {
+        console.error(`✗ step ${step.role} has no runnable implementation`);
+        process.exit(2);
+      }
+      const pauseRec = isPaused(paths.pauseStatePath, step.role);
+      if (pauseRec) {
+        console.error(`✗ step ${step.role} is paused: ${pauseRec.reason}`);
+        process.exit(3);
+      }
+      const agentEnv: string = step.env ?? opts.env ?? agentDefaultEnv(def.environments);
+      const targetEnv: string = opts.targetEnv ?? agentEnv;
+      const ctx: AgentContext = {
+        role: step.role,
+        agentEnv,
+        targetEnv,
+        sessionId,
+        approvals,
+        dryRun: Boolean(opts.dryRun),
+        opaUrl: opts.opaUrl,
+        auditPath: paths.auditPath,
+        now: new Date().toISOString(),
+      };
+      console.log(`\n▶ ${step.role}  (env=${agentEnv} target=${targetEnv})`);
+      try {
+        const out = await impl.run(ctx);
+        console.log(`  ✓ ${out.summary}`);
+        writeAudit(paths.auditPath, {
+          at: new Date().toISOString(),
+          kind: "agent_end",
+          role: step.role,
+          sessionId,
+          detail: out.summary,
+        });
+      } catch (e) {
+        if (e instanceof PolicyDenied) {
+          console.error(`✗ ${step.role}: policy denied tool '${e.tool}' → ${e.reason}`);
+        } else {
+          console.error(`✗ ${step.role}:`, (e as Error).message);
+        }
+        writeAudit(paths.auditPath, {
+          at: new Date().toISOString(),
+          kind: "agent_end",
+          role: step.role,
+          sessionId,
+          error: (e as Error).message,
+        });
+        process.exit(4);
+      }
+    }
+    console.log(`\n✓ pipeline complete (session ${sessionId})`);
+  });
+
+program
   .command("pause <role>")
   .description("Mark an agent as paused; CLI will refuse to run it")
   .requiredOption("--reason <reason>", "Why the agent is paused")
