@@ -88,8 +88,8 @@ jobs:
 
       - name: Validate canonical-entity JSON Schema is itself valid
         run: |
-          # ajv can compile a schema to check it is well-formed.
-          ajv compile -s sre/schema/entity_schema.json
+          # ajv-cli defaults to draft-07; our schema declares draft 2020-12.
+          ajv compile --spec=draft2020 -s sre/schema/entity_schema.json
 
   shellcheck-hooks:
     name: Shellcheck guardrail hooks
