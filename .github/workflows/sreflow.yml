@@ -8,12 +8,14 @@ on:
     paths:
       - 'sre/**'
       - 'tests/sreflow/**'
+      - 'scripts/sreflow/**'
       - '.github/workflows/sreflow.yml'
       - 'SREFLOW.md'
   pull_request:
     paths:
       - 'sre/**'
       - 'tests/sreflow/**'
+      - 'scripts/sreflow/**'
       - '.github/workflows/sreflow.yml'
 
 # Only SREFlow paths are exercised here. The upstream ruflo CI is untouched.
@@ -118,3 +120,27 @@ jobs:
 
       - name: Ensure every agent-allowed tool is registered in tool_allowlist.yaml
         run: bash scripts/sreflow/audit_agent_tools.sh
+
+  runtime-tests:
+    name: Runtime tests (entity resolver)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sre/runtime
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: sre/runtime/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Vitest
+        run: npm test

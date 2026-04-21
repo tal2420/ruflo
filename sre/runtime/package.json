@@ -1,0 +1,22 @@
+{
+  "name": "@sreflow/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SREFlow runtime modules (entity resolver, connector loader, etc.). Self-contained; does not depend on the ruflo umbrella build.",
+  "type": "module",
+  "exports": {
+    "./entity-resolver": "./src/entity-resolver/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
