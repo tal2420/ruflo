@@ -1,0 +1,8 @@
+{
+  "agent":  { "role": "remediator", "env": "prod" },
+  "tool":   "mcp__k8s__restart_pod",
+  "tool_class": "write-high",
+  "target": { "env": "prod", "canonicalEntityId": "svc-checkout", "businessProcessTier": 1 },
+  "approvals": [],
+  "now":    "2026-04-21T10:00:00Z"
+}

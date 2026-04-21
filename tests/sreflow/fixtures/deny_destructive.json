@@ -1,0 +1,11 @@
+{
+  "agent":  { "role": "remediator", "env": "prod" },
+  "tool":   "mcp__k8s__delete_namespace",
+  "tool_class": "destructive",
+  "target": { "env": "prod", "canonicalEntityId": "ns-commerce", "businessProcessTier": 1 },
+  "approvals": [
+    { "human": "alice@corp", "at": "2026-04-21T09:59:00Z", "hash": "abc" },
+    { "human": "bob@corp",   "at": "2026-04-21T09:59:30Z", "hash": "def" }
+  ],
+  "now":    "2026-04-21T10:00:00Z"
+}

@@ -1,0 +1,119 @@
+name: sreflow
+
+on:
+  push:
+    branches:
+      - main
+      - 'sreflow/**'
+    paths:
+      - 'sre/**'
+      - 'tests/sreflow/**'
+      - '.github/workflows/sreflow.yml'
+      - 'SREFLOW.md'
+  pull_request:
+    paths:
+      - 'sre/**'
+      - 'tests/sreflow/**'
+      - '.github/workflows/sreflow.yml'
+
+# Only SREFlow paths are exercised here. The upstream ruflo CI is untouched.
+permissions:
+  contents: read
+
+concurrency:
+  group: sreflow-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  policy-tests:
+    name: OPA policy tests
+    runs-on: ubuntu-latest
+    env:
+      OPA_VERSION: "0.64.1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OPA
+        run: |
+          curl -sSL -o /usr/local/bin/opa \
+            "https://openpolicyagent.org/downloads/v${OPA_VERSION}/opa_linux_amd64_static"
+          chmod +x /usr/local/bin/opa
+          opa version
+
+      - name: opa check (syntax / compile)
+        run: opa check sre/policies/
+
+      - name: opa test (unit tests)
+        run: opa test sre/policies/ tests/sreflow/policies/ -v
+
+      - name: opa fmt (formatting)
+        run: opa fmt --list --fail sre/policies/ tests/sreflow/policies/
+
+  yaml-validate:
+    name: YAML + JSON Schema validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq + ajv-cli
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+          npm install -g ajv-cli ajv-formats
+
+      - name: Parse all agent YAMLs
+        run: |
+          set -e
+          for f in sre/agents/**/*.yaml; do
+            echo "== $f"
+            yq eval '.' "$f" > /dev/null
+          done
+
+      - name: Parse tool allowlist
+        run: yq eval '.' sre/policies/tool_allowlist.yaml > /dev/null
+
+      - name: Parse connector templates
+        run: |
+          set -e
+          for f in sre/connectors/*.yaml.example; do
+            echo "== $f"
+            yq eval '.' "$f" > /dev/null
+          done
+
+      - name: Parse plugin manifest
+        run: jq -e . sre/.claude-plugin/plugin.json > /dev/null
+
+      - name: Validate canonical-entity JSON Schema is itself valid
+        run: |
+          # ajv can compile a schema to check it is well-formed.
+          ajv compile -s sre/schema/entity_schema.json
+
+  shellcheck-hooks:
+    name: Shellcheck guardrail hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update -y && sudo apt-get install -y shellcheck
+
+      - name: shellcheck
+        run: shellcheck -x sre/hooks/*.sh
+
+  agent-allowlist-audit:
+    name: Cross-check agent allowlists vs. policy allowlist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Ensure every agent-allowed tool is registered in tool_allowlist.yaml
+        run: bash scripts/sreflow/audit_agent_tools.sh

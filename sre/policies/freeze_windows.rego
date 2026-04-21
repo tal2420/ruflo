@@ -17,26 +17,26 @@ package sreflow.freeze_windows
 default allow = true
 
 allow = false {
-  some i
-  w := data.sreflow.change_calendar[i]
-  time.parse_rfc3339_ns(w.start) <= time.parse_rfc3339_ns(input.now)
-  time.parse_rfc3339_ns(w.end)   >= time.parse_rfc3339_ns(input.now)
-  includes_tier(w, input.target.businessProcessTier)
-  includes_env(w, input.target.env)
-  not class_permitted(w, input.tool_class)
+	some i
+	w := data.sreflow.change_calendar[i]
+	time.parse_rfc3339_ns(w.start) <= time.parse_rfc3339_ns(input.now)
+	time.parse_rfc3339_ns(w.end) >= time.parse_rfc3339_ns(input.now)
+	includes_tier(w, input.target.businessProcessTier)
+	includes_env(w, input.target.env)
+	not class_permitted(w, input.tool_class)
 }
 
 includes_tier(w, t) {
-  some i
-  w.scope.tiers[i] == t
+	some i
+	w.scope.tiers[i] == t
 }
 
 includes_env(w, e) {
-  some i
-  w.scope.envs[i] == e
+	some i
+	w.scope.envs[i] == e
 }
 
 class_permitted(w, c) {
-  some i
-  w.allow_classes[i] == c
+	some i
+	w.allow_classes[i] == c
 }

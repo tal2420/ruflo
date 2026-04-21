@@ -8,15 +8,17 @@ package sreflow.environment_isolation
 default allow = false
 
 allow {
-  input.agent.env == input.target.env
+	input.agent.env == input.target.env
 }
 
 allow {
-  input.agent.env == "corp"
-  input.tool_class == "read"
+	input.agent.env == "corp"
+	input.tool_class == "read"
 }
 
-deny_reason := sprintf("agent env %q may not call target env %q for class %q",
-  [input.agent.env, input.target.env, input.tool_class]) {
-  not allow
+deny_reason := sprintf(
+	"agent env %q may not call target env %q for class %q",
+	[input.agent.env, input.target.env, input.tool_class],
+) {
+	not allow
 }

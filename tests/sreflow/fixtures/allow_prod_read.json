@@ -1,0 +1,8 @@
+{
+  "agent":  { "role": "dynatrace-collector", "env": "prod" },
+  "tool":   "mcp__dynatrace__list_entities",
+  "tool_class": "read",
+  "target": { "env": "prod", "canonicalEntityId": "svc-checkout", "businessProcessTier": 1 },
+  "approvals": [],
+  "now":    "2026-04-21T10:00:00Z"
+}

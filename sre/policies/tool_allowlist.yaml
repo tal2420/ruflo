@@ -11,139 +11,364 @@
 #
 # Approvals are evaluated by sre/policies/approvals.rego against the affected
 # business-process criticality tier.
+#
+# This YAML is loaded by OPA and exposed as data.sreflow.tool_allowlist.tools.
 
-version: "0.1.0"
+sreflow:
+  tool_allowlist:
+    version: "0.1.0"
+    tools:
 
-tools:
+      # ---------- Knowledge graph (internal) ----------
+      - name: kg__query
+        class: read
+        envs: [prod, stage, corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
 
-  # ---------- Knowledge graph (internal) ----------
-  - name: kg__query
-    class: read
-    envs: [prod, stage, corp]
-    approvals: { tier1: 0, tier2: 0, tier3: 0 }
+      - name: kg__upsert_entity
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+        notes: "Internal state only; no external side effect."
 
-  - name: kg__upsert_entity
-    class: write-low
-    envs: [corp]
-    approvals: { tier1: 0, tier2: 0, tier3: 0 }
-    notes: "Internal state only; no external side effect."
+      - name: kg__upsert_edge
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
 
-  - name: kg__upsert_edge
-    class: write-low
-    envs: [corp]
-    approvals: { tier1: 0, tier2: 0, tier3: 0 }
+      - name: kg__upsert_canonical_entity
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
 
-  # ---------- Dynatrace (read-only) ----------
-  - name: mcp__dynatrace__list_entities
-    class: read
-    envs: [prod, stage]
-    approvals: { tier1: 0, tier2: 0, tier3: 0 }
+      - name: kg__upsert_same_as_edge
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
 
-  - name: mcp__dynatrace__query_timeseries
-    class: read
-    envs: [prod, stage]
+      - name: kg__append_conflict_queue
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
 
-  - name: mcp__dynatrace__query_logs
-    class: read
-    envs: [prod, stage]
-    notes: "Output is scrubbed for PII at the hook layer before returning to the agent."
+      # ---------- Dynatrace (read-only) ----------
+      - name: mcp__dynatrace__list_entities
+        class: read
+        envs: [prod, stage]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
 
-  - name: mcp__dynatrace__query_traces
-    class: read
-    envs: [prod, stage]
+      - name: mcp__dynatrace__get_entity
+        class: read
+        envs: [prod, stage]
 
-  # ---------- SolarWinds (read-only) ----------
-  - name: mcp__solarwinds__swis_query
-    class: read
-    envs: [prod, stage, corp]
+      - name: mcp__dynatrace__get_smartscape
+        class: read
+        envs: [prod, stage]
 
-  - name: mcp__solarwinds__ncm_get_config
-    class: read
-    envs: [prod, stage, corp]
-    notes: "Configs are scrubbed of credentials at the hook layer."
+      - name: mcp__dynatrace__list_problems
+        class: read
+        envs: [prod, stage]
 
-  # ---------- BMC Helix / Discovery (read-only collector usage) ----------
-  - name: mcp__bmc-helix__list_cis
-    class: read
-    envs: [prod, stage]
+      - name: mcp__dynatrace__list_slos
+        class: read
+        envs: [prod, stage]
 
-  - name: mcp__bmc-helix__list_business_services
-    class: read
-    envs: [prod, stage]
+      - name: mcp__dynatrace__query_timeseries
+        class: read
+        envs: [prod, stage]
 
-  - name: mcp__bmc-helix__list_incidents
-    class: read
-    envs: [prod, stage]
+      - name: mcp__dynatrace__query_logs
+        class: read
+        envs: [prod, stage]
+        notes: "Output is scrubbed for PII at the hook layer before returning to the agent."
 
-  - name: mcp__bmc-helix__list_changes
-    class: read
-    envs: [prod, stage]
+      - name: mcp__dynatrace__query_traces
+        class: read
+        envs: [prod, stage]
 
-  - name: mcp__bmc-discovery__query
-    class: read
-    envs: [prod, stage]
+      # ---------- SolarWinds (read-only) ----------
+      - name: mcp__solarwinds__swis_query
+        class: read
+        envs: [prod, stage, corp]
 
-  # ---------- Ticketing (write-low) ----------
-  - name: tickets__create
-    class: write-low
-    envs: [corp]
-    approvals: { tier1: 0, tier2: 0, tier3: 0 }
-    notes: "Creates tickets only. No external system mutation beyond ticketing."
+      - name: mcp__solarwinds__list_nodes
+        class: read
+        envs: [prod, stage, corp]
 
-  - name: tickets__update
-    class: write-low
-    envs: [corp]
+      - name: mcp__solarwinds__get_node
+        class: read
+        envs: [prod, stage, corp]
 
-  # ---------- Remediation (write-high) ----------
-  - name: mcp__k8s__restart_pod
-    class: write-high
-    envs: [prod, stage]
-    approvals: { tier1: 1, tier2: 1, tier3: 0 }
-    rate_limit: "10/hour"
-    notes: "Tier-3 allowed autonomous within envelope; tier-1/2 require 1 human approval."
+      - name: mcp__solarwinds__list_interfaces
+        class: read
+        envs: [prod, stage, corp]
 
-  - name: mcp__k8s__scale_deployment
-    class: write-high
-    envs: [prod, stage]
-    approvals: { tier1: 1, tier2: 1, tier3: 1 }
-    rate_limit: "20/hour"
+      - name: mcp__solarwinds__ipam_list_subnets
+        class: read
+        envs: [prod, stage, corp]
 
-  - name: mcp__cloud__restart_instance
-    class: write-high
-    envs: [prod, stage]
-    approvals: { tier1: 1, tier2: 1, tier3: 0 }
-    rate_limit: "5/hour"
+      - name: mcp__solarwinds__ncm_get_config
+        class: read
+        envs: [prod, stage, corp]
+        notes: "Configs are scrubbed of credentials at the hook layer."
 
-  - name: mcp__feature-flag__toggle
-    class: write-high
-    envs: [prod, stage]
-    approvals: { tier1: 1, tier2: 1, tier3: 1 }
+      # ---------- BMC Helix (read-only collector usage) ----------
+      - name: mcp__bmc-helix__list_cis
+        class: read
+        envs: [prod, stage]
 
-  - name: mcp__traffic__shift_weights
-    class: write-high
-    envs: [prod, stage]
-    approvals: { tier1: 2, tier2: 1, tier3: 1 }
+      - name: mcp__bmc-helix__get_ci
+        class: read
+        envs: [prod, stage]
 
-  # ---------- Destructive (NEVER BOUND) ----------
-  # These are listed only to make their refusal explicit. No agent role may call them.
-  # Break-glass is the only path, and break-glass does not read this file.
-  - name: mcp__k8s__delete_namespace
-    class: destructive
-    envs: []
-    approvals: { tier1: -1, tier2: -1, tier3: -1 }
-    notes: "Destructive. Not bound to any agent role."
+      - name: mcp__bmc-helix__list_ci_relationships
+        class: read
+        envs: [prod, stage]
 
-  - name: mcp__database__drop_table
-    class: destructive
-    envs: []
-    approvals: { tier1: -1, tier2: -1, tier3: -1 }
+      - name: mcp__bmc-helix__list_business_services
+        class: read
+        envs: [prod, stage]
 
-  - name: mcp__dns__update
-    class: destructive
-    envs: []
-    approvals: { tier1: -1, tier2: -1, tier3: -1 }
+      - name: mcp__bmc-helix__list_incidents
+        class: read
+        envs: [prod, stage]
 
-  - name: mcp__iam__revoke_role
-    class: destructive
-    envs: []
-    approvals: { tier1: -1, tier2: -1, tier3: -1 }
+      - name: mcp__bmc-helix__list_changes
+        class: read
+        envs: [prod, stage]
+
+      - name: mcp__bmc-helix__list_problems
+        class: read
+        envs: [prod, stage]
+
+      # ---------- BMC Discovery / ADDM (read-only) ----------
+      - name: mcp__bmc-discovery__query
+        class: read
+        envs: [prod, stage]
+
+      - name: mcp__bmc-discovery__list_hosts
+        class: read
+        envs: [prod, stage]
+
+      - name: mcp__bmc-discovery__list_software_instances
+        class: read
+        envs: [prod, stage]
+
+      - name: mcp__bmc-discovery__list_business_application_instances
+        class: read
+        envs: [prod, stage]
+
+      - name: mcp__bmc-discovery__get_dependency_model
+        class: read
+        envs: [prod, stage]
+
+      # ---------- Documentation sources (read-only) ----------
+      - name: mcp__confluence__list_pages
+        class: read
+        envs: [corp]
+
+      - name: mcp__confluence__get_page
+        class: read
+        envs: [corp]
+
+      - name: mcp__sharepoint__list_files
+        class: read
+        envs: [corp]
+
+      - name: mcp__sharepoint__get_file
+        class: read
+        envs: [corp]
+
+      - name: mcp__notion__list_pages
+        class: read
+        envs: [corp]
+
+      - name: mcp__gdrive__list_files
+        class: read
+        envs: [corp]
+
+      - name: mcp__gdrive__export_file
+        class: read
+        envs: [corp]
+
+      - name: mcp__jira__list_attachments
+        class: read
+        envs: [corp]
+
+      # ---------- Document parsing (local compute; no external side effect) ----------
+      - name: pdf__parse
+        class: read
+        envs: [corp]
+
+      - name: vsdx__parse
+        class: read
+        envs: [corp]
+
+      - name: drawio__parse
+        class: read
+        envs: [corp]
+
+      - name: lucid__export
+        class: read
+        envs: [corp]
+
+      - name: ocr__run
+        class: read
+        envs: [corp]
+
+      # ---------- Observability stores (read-only) ----------
+      - name: mcp__loki__query
+        class: read
+        envs: [prod, stage]
+
+      - name: mcp__prometheus__query_range
+        class: read
+        envs: [prod, stage]
+
+      - name: mcp__tempo__query_traces
+        class: read
+        envs: [prod, stage]
+
+      - name: mcp__health__check
+        class: read
+        envs: [prod, stage]
+
+      # ---------- Embeddings / vector store ----------
+      - name: embeddings__search
+        class: read
+        envs: [prod, stage, corp]
+
+      - name: embeddings__similarity
+        class: read
+        envs: [prod, stage, corp]
+
+      - name: embeddings__embed_chunks
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+        notes: "Writes to internal vector store; no external side effect."
+
+      # ---------- Diagrams / KB ----------
+      - name: diagram__render_mermaid
+        class: read
+        envs: [corp]
+
+      - name: diagram__render_c4
+        class: read
+        envs: [corp]
+
+      - name: kb__publish_page
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+        notes: "Publishes to SREFlow-owned KB pages only; overwrites auto-generated sections, preserves human-pinned content."
+
+      # ---------- Proposal / swarm / consensus (internal orchestration) ----------
+      - name: proposal__compose
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+      - name: proposal__submit_for_approval
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+      - name: proposal__mark_step_complete
+        class: write-low
+        envs: [prod, stage, corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+      - name: swarm__spawn_specialist
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+      - name: swarm__gather_votes
+        class: read
+        envs: [corp]
+
+      - name: consensus__vote
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+      # ---------- Chat / notification (write-low — posts status only) ----------
+      - name: chat__post_update
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+
+      # ---------- Ticketing (read + write-low) ----------
+      - name: tickets__query
+        class: read
+        envs: [corp]
+
+      - name: tickets__draft
+        class: read
+        envs: [corp]
+        notes: "A draft is stored internally only; no ticket is created."
+
+      - name: tickets__create
+        class: write-low
+        envs: [corp]
+        approvals: { tier1: 0, tier2: 0, tier3: 0 }
+        notes: "Creates tickets only. No external system mutation beyond ticketing."
+
+      - name: tickets__update
+        class: write-low
+        envs: [corp]
+
+      # ---------- Remediation (write-high) ----------
+      - name: mcp__k8s__restart_pod
+        class: write-high
+        envs: [prod, stage]
+        approvals: { tier1: 1, tier2: 1, tier3: 0 }
+        rate_limit: "10/hour"
+        notes: "Tier-3 allowed autonomous within envelope; tier-1/2 require 1 human approval."
+
+      - name: mcp__k8s__scale_deployment
+        class: write-high
+        envs: [prod, stage]
+        approvals: { tier1: 1, tier2: 1, tier3: 1 }
+        rate_limit: "20/hour"
+
+      - name: mcp__cloud__restart_instance
+        class: write-high
+        envs: [prod, stage]
+        approvals: { tier1: 1, tier2: 1, tier3: 0 }
+        rate_limit: "5/hour"
+
+      - name: mcp__feature-flag__toggle
+        class: write-high
+        envs: [prod, stage]
+        approvals: { tier1: 1, tier2: 1, tier3: 1 }
+
+      - name: mcp__traffic__shift_weights
+        class: write-high
+        envs: [prod, stage]
+        approvals: { tier1: 2, tier2: 1, tier3: 1 }
+
+      # ---------- Destructive (NEVER BOUND) ----------
+      # These are listed only to make their refusal explicit. No agent role may call them.
+      # Break-glass is the only path, and break-glass does not read this file.
+      - name: mcp__k8s__delete_namespace
+        class: destructive
+        envs: []
+        approvals: { tier1: -1, tier2: -1, tier3: -1 }
+        notes: "Destructive. Not bound to any agent role."
+
+      - name: mcp__database__drop_table
+        class: destructive
+        envs: []
+        approvals: { tier1: -1, tier2: -1, tier3: -1 }
+
+      - name: mcp__dns__update
+        class: destructive
+        envs: []
+        approvals: { tier1: -1, tier2: -1, tier3: -1 }
+
+      - name: mcp__iam__revoke_role
+        class: destructive
+        envs: []
+        approvals: { tier1: -1, tier2: -1, tier3: -1 }
