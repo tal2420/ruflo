@@ -5,6 +5,7 @@ import { dirname, resolve as pathResolve } from "node:path";
 import {
   mapEntity,
   fetchEntities,
+  fetchServiceCalls,
   TYPE_MAP,
   type DynatraceApiEntity,
   type DynatraceListResponse,
@@ -173,5 +174,92 @@ describe("fetchEntities (no network — injected fetch)", () => {
     );
     expect(capturedUrl).toMatch(/entitySelector=/);
     expect(decodeURIComponent(capturedUrl)).toContain('mzName("sandbox-checkout")');
+  });
+});
+
+describe("fetchServiceCalls", () => {
+  function mockFetch(responses: Response[]): FetchLike {
+    let i = 0;
+    return async (_url: string, _init?: RequestInit) => {
+      const next = responses[i++];
+      if (!next) throw new Error("mockFetch exhausted");
+      return next;
+    };
+  }
+  function jsonResp(body: DynatraceListResponse): Response {
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const withRels = (id: string, callees: string[]): DynatraceApiEntity => ({
+    entityId: id,
+    displayName: id,
+    type: "SERVICE",
+    fromRelationships: { calls: callees.map((c) => ({ id: c, type: "SERVICE" })) },
+  });
+
+  it("emits one edge per (fromId → callee) from fromRelationships.calls", async () => {
+    const page: DynatraceListResponse = {
+      entities: [
+        withRels("SERVICE-A", ["SERVICE-B", "SERVICE-C"]),
+        withRels("SERVICE-B", ["SERVICE-C"]),
+        withRels("SERVICE-D", []),
+      ],
+    };
+    const edges = await fetchServiceCalls(
+      { tenantUrl: "https://tenant.example.com", apiToken: "t" },
+      mockFetch([jsonResp(page)]),
+    );
+    expect(edges).toEqual([
+      { fromId: "SERVICE-A", toId: "SERVICE-B" },
+      { fromId: "SERVICE-A", toId: "SERVICE-C" },
+      { fromId: "SERVICE-B", toId: "SERVICE-C" },
+    ]);
+  });
+
+  it("deduplicates repeated edges across pages", async () => {
+    const page1: DynatraceListResponse = {
+      entities: [withRels("SERVICE-A", ["SERVICE-B"])],
+      nextPageKey: "pk-2",
+    };
+    const page2: DynatraceListResponse = {
+      entities: [withRels("SERVICE-A", ["SERVICE-B", "SERVICE-C"])],
+    };
+    const edges = await fetchServiceCalls(
+      { tenantUrl: "https://tenant.example.com", apiToken: "t" },
+      mockFetch([jsonResp(page1), jsonResp(page2)]),
+    );
+    // A→B appears twice but should be emitted once; A→C once.
+    expect(edges.length).toBe(2);
+    expect(new Set(edges.map((e) => e.toId))).toEqual(new Set(["SERVICE-B", "SERVICE-C"]));
+  });
+
+  it("forces +fromRelationships into the fields param even when the caller omitted it", async () => {
+    let capturedUrl = "";
+    const fetchImpl: FetchLike = async (url, _init) => {
+      capturedUrl = url;
+      return jsonResp({ entities: [] });
+    };
+    await fetchServiceCalls(
+      { tenantUrl: "https://tenant.example.com", apiToken: "t" },
+      fetchImpl,
+    );
+    expect(decodeURIComponent(capturedUrl)).toContain("fromRelationships");
+  });
+
+  it("returns empty array when no entities expose 'calls'", async () => {
+    const page: DynatraceListResponse = {
+      entities: [
+        { entityId: "SERVICE-X", displayName: "x", type: "SERVICE" },
+        { entityId: "SERVICE-Y", displayName: "y", type: "SERVICE", fromRelationships: {} },
+      ],
+    };
+    const edges = await fetchServiceCalls(
+      { tenantUrl: "https://tenant.example.com", apiToken: "t" },
+      mockFetch([jsonResp(page)]),
+    );
+    expect(edges).toEqual([]);
   });
 });

@@ -40,6 +40,16 @@ export interface DynatraceApiEntity {
   properties?: Record<string, unknown>;
   firstSeenTms?: number;
   lastSeenTms?: number;
+  /** Relationships where this entity is the source. Keyed by relationship type (e.g. "calls"). */
+  fromRelationships?: Record<string, Array<{ id: string; type?: string }>>;
+  /** Relationships where this entity is the target. */
+  toRelationships?: Record<string, Array<{ id: string; type?: string }>>;
+}
+
+/** One service-to-service call edge derived from Dynatrace relationships. */
+export interface ServiceCallEdge {
+  fromId: string;
+  toId: string;
 }
 
 export interface DynatraceListResponse {
@@ -183,15 +193,14 @@ async function readBody(resp: Response): Promise<string> {
 }
 
 /**
- * Fetch and map all entities matching the configured selector, paginating
- * through Dynatrace's nextPageKey until exhausted. Honors 429 backoff.
- * The injected `fetchImpl` defaults to the global fetch (Node 20+).
+ * Internal paginating iterator over raw Dynatrace entities. Handles auth,
+ * 429 backoff, and nextPageKey traversal. Used by both fetchEntities (which
+ * maps to SourceEntity) and fetchServiceCalls (which reads relationships).
  */
-export async function fetchEntities(
+async function* iterateRawEntities(
   cfg: DynatraceConfig,
-  fetchImpl: FetchLike = globalThis.fetch,
-): Promise<SourceEntity[]> {
-  const entities: SourceEntity[] = [];
+  fetchImpl: FetchLike,
+): AsyncGenerator<DynatraceApiEntity, void, void> {
   let url: string | null = buildInitialUrl(cfg);
   let consecutive429s = 0;
 
@@ -229,11 +238,59 @@ export async function fetchEntities(
 
     const data = (await resp.json()) as DynatraceListResponse;
     for (const raw of data.entities ?? []) {
-      const mapped = mapEntity(raw);
-      if (mapped) entities.push(mapped);
+      yield raw;
     }
     url = data.nextPageKey ? buildNextUrl(cfg, data.nextPageKey) : null;
   }
+}
 
+/**
+ * Fetch and map all entities matching the configured selector, paginating
+ * through Dynatrace's nextPageKey until exhausted. Honors 429 backoff.
+ * The injected `fetchImpl` defaults to the global fetch (Node 20+).
+ */
+export async function fetchEntities(
+  cfg: DynatraceConfig,
+  fetchImpl: FetchLike = globalThis.fetch,
+): Promise<SourceEntity[]> {
+  const entities: SourceEntity[] = [];
+  for await (const raw of iterateRawEntities(cfg, fetchImpl)) {
+    const mapped = mapEntity(raw);
+    if (mapped) entities.push(mapped);
+  }
   return entities;
+}
+
+/**
+ * Fetch service→service call edges from Dynatrace by reading
+ * `fromRelationships.calls` on each entity in the selector.
+ *
+ * Requires `fields=+fromRelationships` — this function forces that if the
+ * caller didn't. Returns unique (fromId, toId) pairs; duplicates filtered.
+ */
+export async function fetchServiceCalls(
+  cfg: DynatraceConfig,
+  fetchImpl: FetchLike = globalThis.fetch,
+): Promise<ServiceCallEdge[]> {
+  const fields = cfg.fields
+    ? cfg.fields.includes("fromRelationships")
+      ? cfg.fields
+      : `${cfg.fields},+fromRelationships`
+    : "+tags,+fromRelationships";
+  const effective: DynatraceConfig = { ...cfg, fields };
+
+  const seen = new Set<string>();
+  const edges: ServiceCallEdge[] = [];
+  for await (const raw of iterateRawEntities(effective, fetchImpl)) {
+    const calls = raw.fromRelationships?.calls;
+    if (!calls) continue;
+    for (const to of calls) {
+      if (!to.id) continue;
+      const key = `${raw.entityId}|${to.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      edges.push({ fromId: raw.entityId, toId: to.id });
+    }
+  }
+  return edges;
 }
