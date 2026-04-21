@@ -169,3 +169,6 @@ sre/connectors/*.local.yaml
 
 # SREFlow — local audit / denial logs.
 /var/log/sreflow/
+
+# SREFlow — Phase-0 generated outputs (rendered diagrams, etc.).
+sre/docs/generated/

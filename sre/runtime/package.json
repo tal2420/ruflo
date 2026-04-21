@@ -9,10 +9,15 @@
   },
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "phase0": "tsx scripts/phase0/up.ts"
+  },
+  "dependencies": {
+    "neo4j-driver": "^5.20.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   },

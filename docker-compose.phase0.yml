@@ -1,0 +1,52 @@
+# Phase 0 local stack — Neo4j + OPA.
+#
+# Run:   docker compose -f docker-compose.phase0.yml up -d
+# Stop:  docker compose -f docker-compose.phase0.yml down
+# Reset: docker compose -f docker-compose.phase0.yml down -v
+#
+# Neo4j Browser:  http://localhost:7474  (user: neo4j, pw: phase0-password-change-me)
+# OPA server:     http://localhost:8181
+
+services:
+  neo4j:
+    image: neo4j:5.18
+    container_name: sreflow-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: "neo4j/phase0-password-change-me"
+      NEO4J_server_memory_heap_initial__size: "512M"
+      NEO4J_server_memory_heap_max__size: "1G"
+      NEO4J_server_memory_pagecache_size: "256M"
+    volumes:
+      - sreflow_neo4j_data:/data
+      - sreflow_neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p phase0-password-change-me 'RETURN 1' || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  opa:
+    image: openpolicyagent/opa:0.64.1
+    container_name: sreflow-opa
+    ports:
+      - "8181:8181"
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--log-level=info"
+      - "/policies"
+    volumes:
+      - ./sre/policies:/policies:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sreflow_neo4j_data:
+  sreflow_neo4j_logs:
