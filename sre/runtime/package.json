@@ -10,7 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "phase0": "tsx scripts/phase0/up.ts"
+    "phase0": "tsx scripts/phase0/up.ts",
+    "phase0:live": "tsx scripts/phase0/up-live.ts"
   },
   "dependencies": {
     "neo4j-driver": "^5.20.0"

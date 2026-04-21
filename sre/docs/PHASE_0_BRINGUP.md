@@ -129,26 +129,36 @@ curl -sS -H "Authorization: Api-Token $(vault kv get -field=api_token kv/dynatra
   "$DT_TENANT_URL/api/v2/entities?entitySelector=type(SERVICE)&pageSize=1" | jq '.totalCount'
 ```
 
-## Step 4 — Run the collector in dry-run
+## Step 4 — Run the live Phase-0 pipeline
 
-Phase 0 collectors must run with write-ability disabled. The configuration `phase.current: 0` in `sre/.claude-plugin/plugin.json` sets `maxWriteAuthority: none`. Until Phase 1 is enabled, the `kg__upsert_entity` / `kg__upsert_edge` tools should be pointed at a **staging KG namespace** or a local Neo4j instance — never shared production.
-
-Run the Dynatrace collector once in dry-run. (Exact command depends on how you invoke SREFlow agents in your environment — below is the pattern.)
+The mocked Phase-0 pipeline (`npm run phase0`) is a shape test — it proves the infra and pipeline plumbing work but says nothing about your Dynatrace tenant. Once a read-only sandbox token is in hand, use the live runner:
 
 ```bash
-npx claude-flow agent run dynatrace-collector \
-  --connector sre/connectors/dynatrace.yaml \
-  --kg bolt://localhost:7687 \
-  --kg-user neo4j --kg-pass phase0-password-change-me \
-  --dry-run
+export DT_TENANT_URL="https://abc12345.live.dynatrace.com"   # no trailing slash
+export DT_API_TOKEN="dt0c01.***"                             # scope: entities.read
+# Optional scoping (recommended):
+export DT_MANAGEMENT_ZONE="sandbox-checkout"
+export DT_ENTITY_SELECTOR='type(SERVICE)'
+
+cd sre/runtime
+npm run phase0:live
 ```
 
-`--dry-run` emits the structured upserts it *would* make without actually writing. Inspect stdout to confirm:
-- `canonicalType` values are correct (e.g., `Service`, `Host`, not raw Dynatrace strings).
-- `source=dynatrace` and `sourceId` is stable across runs.
-- Tag maps are sane; nothing sensitive is in them.
+The live runner:
+1. Calls the adapter at [`adapters/dynatrace.ts`](../runtime/scripts/phase0/adapters/dynatrace.ts), which fetches `/api/v2/entities`, paginates via `nextPageKey`, and maps each entity into the `SourceEntity` shape.
+2. Merges with the still-mocked BMC Helix + SolarWinds fixtures (their adapters land later — that's fine for Phase 0).
+3. Hands the combined list to the same `runPhase0` pipeline the mocked runner uses. Schema apply → ingest → resolve → seed BP → render diagram.
 
-When that looks right, re-run without `--dry-run` to populate the KG.
+**Token handling — non-negotiable.**
+- Never commit `DT_API_TOKEN` to git. Anything you export in the shell is OK; anything you write to a tracked file is not.
+- In production, source it from Vault/Secrets Manager at runtime, not from env files.
+- Corporate proxy? Node 20's global `fetch` does not honor `HTTPS_PROXY`. Set it with an undici dispatcher or raise a Phase-0 gap ticket — don't paper over it by exporting plaintext certs.
+
+To verify the token works without touching SREFlow:
+```bash
+curl -sS -H "Authorization: Api-Token $DT_API_TOKEN" \
+  "$DT_TENANT_URL/api/v2/entities?entitySelector=type(SERVICE)&pageSize=1" | jq '.totalCount'
+```
 
 Count ingested entities:
 ```cypher

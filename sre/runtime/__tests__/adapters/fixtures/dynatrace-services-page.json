@@ -1,0 +1,55 @@
+{
+  "totalCount": 4,
+  "pageSize": 500,
+  "entities": [
+    {
+      "entityId": "SERVICE-REAL001",
+      "displayName": "checkout-web-prod",
+      "type": "SERVICE",
+      "tags": [
+        { "key": "team",  "value": "checkout", "context": "CONTEXTLESS" },
+        { "key": "env",   "value": "prod",     "context": "CONTEXTLESS" },
+        { "key": "tier",  "value": "1",        "context": "CONTEXTLESS" },
+        { "key": "fqdn",  "value": "checkout-web.prod.corp.internal", "context": "CONTEXTLESS" }
+      ],
+      "properties": {
+        "kubernetesClusterName": "prod-us-east-1",
+        "kubernetesNamespace":   "checkout",
+        "kubernetesServiceName": "checkout-web"
+      },
+      "firstSeenTms": 1735689600000,
+      "lastSeenTms":  1745193600000
+    },
+    {
+      "entityId": "SERVICE-REAL002",
+      "displayName": "payments-api-prod",
+      "type": "SERVICE",
+      "tags": [
+        { "key": "team", "value": "payments", "context": "CONTEXTLESS" },
+        { "key": "env",  "value": "prod",     "context": "CONTEXTLESS" },
+        { "key": "AWS.region", "value": "us-east-1", "context": "AWS" }
+      ],
+      "properties": {
+        "detectedName": "payments-api.prod.corp.internal"
+      },
+      "lastSeenTms": 1745193600000
+    },
+    {
+      "entityId": "HOST-REAL003",
+      "displayName": "ip-10-0-1-23.ec2.internal",
+      "type": "HOST",
+      "tags": [
+        { "key": "env", "value": "prod", "context": "CONTEXTLESS" }
+      ],
+      "properties": {},
+      "lastSeenTms": 1745193600000
+    },
+    {
+      "entityId": "NETWORK_INTERFACE-REAL004",
+      "displayName": "eth0",
+      "type": "NETWORK_INTERFACE",
+      "properties": {},
+      "lastSeenTms": 1745193600000
+    }
+  ]
+}
