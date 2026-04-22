@@ -456,4 +456,266 @@ program
     }
   });
 
+// ---------------------------------------------------------------------------
+// curate — human overrides on the BP knowledge base.
+//
+// Every field locked, component added, or component rejected carries an
+// attribution ("user", "evidence") so the audit trail records *why* the
+// knowledge base now diverges from auto-discovery.
+// ---------------------------------------------------------------------------
+
+function collectCsv(value: string, prev: string[]): string[] {
+  return [...prev, ...value.split(",").map((s) => s.trim()).filter(Boolean)];
+}
+
+program
+  .command("curate <bp>")
+  .description(
+    "Human overrides for a BusinessProcess. Locks fields, adds/removes components. Preserved across analyst re-runs.",
+  )
+  .option("--name <name>", "Override the English name")
+  .option("--name-he <name>", "Override the Hebrew name")
+  .option("--tier <n>", "Override the criticality tier (1|2|3)")
+  .option("--scope <scope>", "Override scope (application|feature)")
+  .option("--lock <fields>", "Comma-separated fields to lock from auto-update (e.g. 'name,nameHe,criticalityTier')", collectCsv, [])
+  .option("--unlock <fields>", "Comma-separated fields to unlock", collectCsv, [])
+  .option("--add-component <canonicalId>", "Add a CanonicalEntity as a component (repeatable)", (v: string, p: string[]) => [...p, v], [])
+  .option("--remove-component <canonicalId>", "Mark a REALIZED_BY edge as rejected (repeatable)", (v: string, p: string[]) => [...p, v], [])
+  .option("--role <role>", "Role for --add-component: core|upstream|downstream", "downstream")
+  .option("--note <text>", "Free-form human note stored on the BP")
+  .option("--evidence <text>", "Justification recorded on every edge/field touched by this call")
+  .option("--user <name>", "Curator identity (defaults to $USER)", process.env.USER ?? "unknown")
+  .action(async (bpQuery: string, opts) => {
+    const driver = neo4j.driver(
+      process.env.NEO4J_URI ?? "bolt://localhost:7687",
+      neo4j.auth.basic(
+        process.env.NEO4J_USER ?? "neo4j",
+        process.env.NEO4J_PASSWORD ?? "phase0-password-change-me",
+      ),
+    );
+    const session = driver.session();
+    const paths = resolvePaths();
+    const sessionId = `curate-${randomUUID()}`;
+    const now = new Date().toISOString();
+    const evidence = opts.evidence ?? `human:${opts.user} @ ${now}`;
+    const changes: string[] = [];
+    try {
+      // Resolve BP by id or name
+      const findR = await session.run(
+        `MATCH (bp:BusinessProcess)
+         WHERE bp.id = $q OR bp.name = $q OR bp.nameHe = $q
+         RETURN bp.id AS id, coalesce(bp.lockedFields, []) AS lockedFields LIMIT 1`,
+        { q: bpQuery },
+      );
+      if (findR.records.length === 0) {
+        console.error(`No BusinessProcess found for '${bpQuery}'`);
+        process.exit(2);
+      }
+      const bpId = findR.records[0]!.get("id") as string;
+      const currentLocked = new Set<string>(findR.records[0]!.get("lockedFields") as string[]);
+
+      // Apply field overrides
+      const sets: Record<string, unknown> = {};
+      if (opts.name) {
+        sets.name = opts.name;
+        changes.push(`name='${opts.name}'`);
+      }
+      if (opts.nameHe) {
+        sets.nameHe = opts.nameHe;
+        changes.push(`nameHe='${opts.nameHe}'`);
+      }
+      if (opts.tier) {
+        const t = Number(opts.tier);
+        if (![1, 2, 3].includes(t)) {
+          console.error(`--tier must be 1, 2, or 3`);
+          process.exit(2);
+        }
+        sets.criticalityTier = t;
+        changes.push(`tier=${t}`);
+      }
+      if (opts.scope) {
+        sets.scope = opts.scope;
+        changes.push(`scope='${opts.scope}'`);
+      }
+      if (opts.note) {
+        sets.humanNotes = opts.note;
+        changes.push(`note set`);
+      }
+
+      // Lock / unlock field membership
+      for (const f of opts.lock as string[]) currentLocked.add(f);
+      for (const f of opts.unlock as string[]) currentLocked.delete(f);
+
+      await session.run(
+        `MATCH (bp:BusinessProcess { id: $bpId })
+         SET bp += $sets,
+             bp.lockedFields = $locked,
+             bp.curatedAt = datetime(),
+             bp.curatedBy = $user,
+             bp.updatedAt = datetime()`,
+        { bpId, sets, locked: Array.from(currentLocked), user: opts.user },
+      );
+      if ((opts.lock as string[]).length > 0) changes.push(`locked=[${(opts.lock as string[]).join(",")}]`);
+      if ((opts.unlock as string[]).length > 0) changes.push(`unlocked=[${(opts.unlock as string[]).join(",")}]`);
+
+      // Add components
+      for (const cid of opts.addComponent as string[]) {
+        await session.run(
+          `MATCH (bp:BusinessProcess { id: $bpId }), (c:CanonicalEntity { id: $cid })
+           MERGE (bp)-[r:REALIZED_BY]->(c)
+           ON CREATE SET r.firstSeen = datetime()
+           SET r.role          = $role,
+               r.status        = "active",
+               r.addedBy       = $user,
+               r.lockedByHuman = true,
+               r.evidence      = $evidence,
+               r.lastSeen      = datetime()`,
+          { bpId, cid, role: opts.role, user: `human:${opts.user}`, evidence },
+        );
+        changes.push(`+component:${cid} (${opts.role})`);
+      }
+
+      // Reject (mark + lock) components
+      for (const cid of opts.removeComponent as string[]) {
+        await session.run(
+          `MATCH (:BusinessProcess { id: $bpId })-[r:REALIZED_BY]->(:CanonicalEntity { id: $cid })
+           SET r.status        = "rejected",
+               r.lockedByHuman = true,
+               r.rejectedBy    = $user,
+               r.rejectedAt    = datetime(),
+               r.evidence      = $evidence`,
+          { bpId, cid, user: `human:${opts.user}`, evidence },
+        );
+        changes.push(`−component:${cid} (rejected)`);
+      }
+
+      writeAudit(paths.auditPath, {
+        at: now,
+        kind: "tool_decision",
+        role: "curator",
+        sessionId,
+        tool: "curate",
+        allow: true,
+        detail: `bp=${bpId} user=${opts.user} changes=[${changes.join("; ")}]`,
+      });
+      console.log(`✓ curated ${bpId}`);
+      for (const c of changes) console.log(`  · ${c}`);
+      console.log(`  (by ${opts.user}; evidence: ${evidence})`);
+    } finally {
+      await session.close();
+      await driver.close();
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// report — what changed in the knowledge base recently.
+// ---------------------------------------------------------------------------
+
+function parseDuration(raw: string | undefined): number {
+  // Returns epoch-millis cutoff. Default: 24h ago.
+  if (!raw) return Date.now() - 24 * 3600 * 1000;
+  const m = raw.match(/^(\d+)\s*([smhd])?$/i);
+  if (!m) return Date.now() - 24 * 3600 * 1000;
+  const n = Number(m[1]);
+  const unit = (m[2] ?? "h").toLowerCase();
+  const ms = { s: 1000, m: 60_000, h: 3600_000, d: 86_400_000 }[unit] ?? 3600_000;
+  return Date.now() - n * ms;
+}
+
+program
+  .command("report <kind>")
+  .description("Report knowledge-base changes. kind=changes|stale|locked|curated")
+  .option("--since <duration>", "Lookback window like '24h', '7d', '30m' (default 24h)")
+  .action(async (kind: string, opts) => {
+    const driver = neo4j.driver(
+      process.env.NEO4J_URI ?? "bolt://localhost:7687",
+      neo4j.auth.basic(
+        process.env.NEO4J_USER ?? "neo4j",
+        process.env.NEO4J_PASSWORD ?? "phase0-password-change-me",
+      ),
+    );
+    const session = driver.session();
+    const cutoff = new Date(parseDuration(opts.since)).toISOString();
+    try {
+      switch (kind) {
+        case "changes": {
+          // Edges created or stale-marked since cutoff.
+          const added = await session.run(
+            `MATCH (bp:BusinessProcess)-[r:REALIZED_BY]->(c:CanonicalEntity)
+             WHERE toString(r.firstSeen) >= $cutoff AND r.status = "active"
+             RETURN bp.name AS bp, coalesce(bp.nameHe, bp.name) AS bpHe,
+                    r.role AS role, c.primaryName AS component, toString(r.firstSeen) AS at
+             ORDER BY at DESC LIMIT 50`,
+            { cutoff },
+          );
+          const stale = await session.run(
+            `MATCH (bp:BusinessProcess)-[r:REALIZED_BY]->(c:CanonicalEntity)
+             WHERE r.status = "stale" AND toString(r.lastSeen) >= $cutoff
+             RETURN bp.name AS bp, c.primaryName AS component, toString(r.lastSeen) AS at
+             ORDER BY at DESC LIMIT 50`,
+            { cutoff },
+          );
+          console.log(`Changes since ${cutoff}:`);
+          console.log(`\n▶ Newly added components (${added.records.length}):`);
+          for (const rec of added.records) {
+            console.log(`  + ${rec.get("bp")}  ← ${rec.get("component")}  (${rec.get("role")})`);
+          }
+          console.log(`\n▶ Components marked stale (${stale.records.length}):`);
+          for (const rec of stale.records) {
+            console.log(`  · ${rec.get("bp")}  —  ${rec.get("component")}`);
+          }
+          break;
+        }
+        case "stale": {
+          const r = await session.run(
+            `MATCH (bp:BusinessProcess)-[r:REALIZED_BY]->(c:CanonicalEntity)
+             WHERE r.status = "stale"
+             RETURN bp.name AS bp, c.primaryName AS component, r.role AS role,
+                    toString(r.lastSeen) AS lastSeen
+             ORDER BY lastSeen DESC LIMIT 100`,
+          );
+          console.log(`All stale components (${r.records.length}):`);
+          for (const rec of r.records) {
+            console.log(`  · ${rec.get("bp").padEnd(38)}  ${rec.get("component").padEnd(60)}  lastSeen=${rec.get("lastSeen")}`);
+          }
+          break;
+        }
+        case "locked": {
+          const r = await session.run(
+            `MATCH (bp:BusinessProcess)
+             WHERE size(coalesce(bp.lockedFields, [])) > 0
+             RETURN bp.id AS id, coalesce(bp.name, "") AS name, bp.lockedFields AS locked,
+                    bp.curatedBy AS by, toString(bp.curatedAt) AS at`,
+          );
+          console.log(`BPs with locked fields (${r.records.length}):`);
+          for (const rec of r.records) {
+            const locked = (rec.get("locked") as string[]).join(",");
+            console.log(`  🔒 ${String(rec.get("name") || rec.get("id")).padEnd(38)}  [${locked}]  by=${rec.get("by") ?? "?"}`);
+          }
+          break;
+        }
+        case "curated": {
+          const r = await session.run(
+            `MATCH (bp:BusinessProcess)
+             WHERE bp.curatedAt IS NOT NULL AND toString(bp.curatedAt) >= $cutoff
+             RETURN bp.id AS id, bp.name AS name, bp.curatedBy AS by, toString(bp.curatedAt) AS at
+             ORDER BY at DESC LIMIT 100`,
+            { cutoff },
+          );
+          console.log(`BPs curated since ${cutoff} (${r.records.length}):`);
+          for (const rec of r.records) {
+            console.log(`  ✎ ${rec.get("at")}  ${rec.get("name") ?? rec.get("id")}  by=${rec.get("by") ?? "?"}`);
+          }
+          break;
+        }
+        default:
+          console.error(`Unknown report kind '${kind}'. Try: changes, stale, locked, curated`);
+          process.exit(2);
+      }
+    } finally {
+      await session.close();
+      await driver.close();
+    }
+  });
+
 await program.parseAsync(process.argv);
