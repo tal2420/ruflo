@@ -243,12 +243,15 @@ export function createSreflowServer(
       try {
         const s = deps.driver().session();
         try {
+          // Aggregation always yields one row (count=0 when there are no
+          // matches), so this also works on a fresh / empty graph.
           const r = await s.run(
-            `RETURN "ok" AS neo4j,
-                    [(n:BusinessProcess) | n][..1] AS sample`,
+            `MATCH (n:BusinessProcess) RETURN count(n) AS n`,
           );
+          const n = coerceNumber(r.records[0]!.get("n")) ?? 0;
           report.neo4j = "ok";
-          report.hasBusinessProcesses = r.records[0]!.get("sample").length > 0;
+          report.businessProcessCount = n;
+          report.hasBusinessProcesses = n > 0;
         } finally {
           await s.close();
         }
