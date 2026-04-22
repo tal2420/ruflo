@@ -13,10 +13,16 @@
     "phase0": "tsx scripts/phase0/up.ts",
     "phase0:live": "tsx scripts/phase0/up-live.ts",
     "agent": "tsx bin/sreflow-agent.ts",
-    "rename-bps": "tsx scripts/rename-bps.ts"
+    "rename-bps": "tsx scripts/rename-bps.ts",
+    "mcp": "tsx bin/sreflow-mcp.ts"
+  },
+  "bin": {
+    "sreflow-agent": "./bin/sreflow-agent.ts",
+    "sreflow-mcp": "./bin/sreflow-mcp.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
+    "@modelcontextprotocol/sdk": "^1.22.0",
     "commander": "^12.1.0",
     "js-yaml": "^4.1.0",
     "neo4j-driver": "^5.20.0",
