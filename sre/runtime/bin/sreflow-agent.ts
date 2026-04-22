@@ -14,8 +14,10 @@
 
 import { Command } from "commander";
 import { randomUUID } from "node:crypto";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve as pathResolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import neo4j from "neo4j-driver";
 import {
   findAgent,
   getImpl,
@@ -25,11 +27,13 @@ import {
   pause,
   PolicyDenied,
   readAuditTail,
+  renderBp,
   resume,
   runnableRoles,
   writeAudit,
   type AgentContext,
   type Approval,
+  type RenderComponent,
 } from "../src/agent-runtime/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -281,6 +285,108 @@ program
       }
     }
     console.log(`\n✓ pipeline complete (session ${sessionId})`);
+  });
+
+program
+  .command("render <bp>")
+  .description(
+    "Render a Mermaid diagram for a BusinessProcess by id or name. Hebrew output via --he (RTL layout).",
+  )
+  .option("--he", "Output Hebrew labels with right-to-left layout", false)
+  .option("--out <path>", "Write to a file instead of stdout")
+  .action(async (bpQuery: string, opts) => {
+    const driver = neo4j.driver(
+      process.env.NEO4J_URI ?? "bolt://localhost:7687",
+      neo4j.auth.basic(
+        process.env.NEO4J_USER ?? "neo4j",
+        process.env.NEO4J_PASSWORD ?? "phase0-password-change-me",
+      ),
+    );
+    const session = driver.session();
+    try {
+      const bpR = await session.run(
+        `MATCH (bp:BusinessProcess)
+         WHERE bp.id = $q OR bp.name = $q OR bp.nameHe = $q
+         RETURN bp LIMIT 1`,
+        { q: bpQuery },
+      );
+      if (bpR.records.length === 0) {
+        console.error(`No BusinessProcess found for '${bpQuery}'`);
+        process.exit(2);
+      }
+      const bpNode = bpR.records[0]!.get("bp").properties as {
+        id: string;
+        name: string;
+        nameHe?: string;
+        scope?: "application" | "feature";
+        criticalityTier?: { toNumber: () => number } | number;
+        sourceName?: string;
+      };
+      const tier =
+        typeof bpNode.criticalityTier === "number"
+          ? bpNode.criticalityTier
+          : typeof bpNode.criticalityTier?.toNumber === "function"
+            ? bpNode.criticalityTier.toNumber()
+            : undefined;
+
+      const hostR = await session.run(
+        `MATCH (:BusinessProcess { id: $id })-[:HOSTED_IN]->(app:BusinessProcess)
+         RETURN app LIMIT 1`,
+        { id: bpNode.id },
+      );
+      const hostedIn =
+        hostR.records.length > 0
+          ? {
+              id: hostR.records[0]!.get("app").properties.id as string,
+              name: (opts.he
+                ? (hostR.records[0]!.get("app").properties.nameHe as string | undefined) ??
+                  (hostR.records[0]!.get("app").properties.name as string)
+                : (hostR.records[0]!.get("app").properties.name as string)),
+            }
+          : undefined;
+
+      const cmpR = await session.run(
+        `MATCH (:BusinessProcess { id: $id })-[r:REALIZED_BY]->(c:CanonicalEntity)
+         RETURN c.id AS id, coalesce(c.primaryName, c.id) AS primaryName, r.role AS role`,
+        { id: bpNode.id },
+      );
+      const components: RenderComponent[] = cmpR.records.map((rec) => {
+        const raw = rec.get("role");
+        const role = raw === "core" || raw === "upstream" || raw === "downstream" ? raw : undefined;
+        return {
+          id: rec.get("id") as string,
+          primaryName: rec.get("primaryName") as string,
+          role,
+        };
+      });
+
+      const diagram = renderBp(
+        {
+          bp: {
+            id: bpNode.id,
+            name: opts.he && bpNode.nameHe ? bpNode.nameHe : bpNode.name,
+            scope: bpNode.scope,
+            criticalityTier: tier,
+            sourceName: bpNode.sourceName,
+          },
+          hostedIn,
+          components,
+        },
+        { lang: opts.he ? "he" : "en" },
+      );
+
+      if (opts.out) {
+        const out = pathResolve(process.cwd(), opts.out);
+        mkdirSync(dirname(out), { recursive: true });
+        writeFileSync(out, diagram + "\n", "utf8");
+        console.error(`✓ diagram written to ${out}`);
+      } else {
+        process.stdout.write(diagram + "\n");
+      }
+    } finally {
+      await session.close();
+      await driver.close();
+    }
   });
 
 program

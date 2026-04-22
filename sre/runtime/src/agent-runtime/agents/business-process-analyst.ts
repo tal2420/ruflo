@@ -14,6 +14,7 @@ import {
   type FeatureCandidate,
   type ServiceRecord,
 } from "./feature-extractor.js";
+import { toHebrew } from "../hebrew-labels.js";
 
 async function readTaggedEntities(driver: Driver): Promise<TaggedEntity[]> {
   const s = driver.session();
@@ -72,9 +73,11 @@ async function upsertBusinessProcess(
 ): Promise<void> {
   const s = driver.session();
   try {
+    const hebrew = toHebrew(bp.name);
     await s.run(
       `MERGE (b:BusinessProcess { id: $id })
        SET b.name             = $name,
+           b.nameHe           = $nameHe,
            b.scope            = "application",
            b.criticalityTier  = $tier,
            b.inferenceMethod  = $inferenceMethod,
@@ -84,6 +87,7 @@ async function upsertBusinessProcess(
       {
         id: bp.id,
         name: bp.name,
+        nameHe: hebrew.he,
         tier,
         inferenceMethod: bp.inferenceMethod,
         anchorTags: bp.anchorTags,
@@ -132,18 +136,18 @@ async function upsertFeatureBp(
   applicationBpId: string,
   tier: 1 | 2 | 3,
 ): Promise<number> {
-  const componentIds = Array.from(
-    new Set([
-      feature.components.core,
-      ...feature.components.upstream,
-      ...feature.components.downstream,
-    ]),
-  );
+  const roleRows = [
+    { id: feature.components.core, role: "core" as const },
+    ...feature.components.upstream.map((id) => ({ id, role: "upstream" as const })),
+    ...feature.components.downstream.map((id) => ({ id, role: "downstream" as const })),
+  ];
+  const hebrew = toHebrew(feature.name);
   const s = driver.session();
   try {
     const r = await s.run(
       `MERGE (fbp:BusinessProcess { id: $id })
        SET fbp.name             = $name,
+           fbp.nameHe           = $nameHe,
            fbp.scope            = "feature",
            fbp.sourceName       = $sourceName,
            fbp.criticalityTier  = $tier,
@@ -154,18 +158,20 @@ async function upsertFeatureBp(
        MATCH (app:BusinessProcess { id: $appId })
        MERGE (fbp)-[:HOSTED_IN]->(app)
        WITH fbp
-       UNWIND $componentIds AS cid
-       MATCH (c:CanonicalEntity { id: cid })
-       MERGE (fbp)-[:REALIZED_BY]->(c)
+       UNWIND $roleRows AS row
+       MATCH (c:CanonicalEntity { id: row.id })
+       MERGE (fbp)-[r:REALIZED_BY]->(c)
+       SET r.role = row.role
        RETURN count(DISTINCT c) AS linked`,
       {
         id: feature.id,
         name: feature.name,
+        nameHe: hebrew.he,
         sourceName: feature.sourceName,
         tier,
         inferenceMethod: feature.inferenceMethod,
         appId: applicationBpId,
-        componentIds,
+        roleRows,
       },
     );
     return r.records[0]?.get("linked")?.toNumber?.() ?? 0;

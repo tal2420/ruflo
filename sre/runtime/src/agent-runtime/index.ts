@@ -5,3 +5,5 @@ export { writeAudit, readAuditTail } from "./audit.js";
 export { isPaused, pause, resume, listPaused } from "./pause-state.js";
 export { loadAgent, listAgents, findAgent, relAgentPath } from "./agent-yaml.js";
 export { getImpl, runnableRoles } from "./registry.js";
+export { renderBp, type RenderBpInput, type RenderComponent } from "./render-bp.js";
+export { toHebrew, roleLabel } from "./hebrew-labels.js";
